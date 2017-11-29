@@ -318,6 +318,14 @@ function install_begin_request($class_loader, &$install_state) {
     header($request->server->get('SERVER_PROTOCOL') . ' 403 Forbidden');
     exit;
   }
+  if ($install_state['interactive'] && drupal_valid_test_ua()) {
+    // Set the default timezone. While this doesn't cause any tests to fail, PHP
+    // complains if 'date.timezone' is not set in php.ini. The Australia/Sydney
+    // timezone is chosen so all tests are run using an edge case scenario
+    // (UTC+10  and DST). This choice is made to prevent timezone related
+    // regressions and reduce the fragility of the testing system in general.
+    date_default_timezone_set('Australia/Sydney');
+  }
 
   $site_path = DrupalKernel::findSitePath($request, FALSE);
   Settings::initialize(dirname(dirname(__DIR__)), $site_path, $class_loader);
@@ -443,6 +451,12 @@ function install_begin_request($class_loader, &$install_state) {
     if (isset($install_state['profile_info']['distribution']['install']['theme'])) {
       $install_state['theme'] = $install_state['profile_info']['distribution']['install']['theme'];
     }
+    // Ensure all profile directories are registered.
+    $profiles = \Drupal::service('profile_handler')->getProfileInheritance($profile);
+    $profile_directories = array_map(function($extension) {
+      return $extension->getPath();
+    }, $profiles);
+    $listing->setProfileDirectories($profile_directories);
   }
 
   // Use the language from the profile configuration, if available, to override
@@ -754,8 +768,7 @@ function install_tasks($install_state) {
       'run' => $install_state['settings_verified'] ? INSTALL_TASK_SKIP : INSTALL_TASK_RUN_IF_NOT_COMPLETED,
       'function' => 'Drupal\Core\Installer\Form\SiteSettingsForm',
     ],
-    'install_write_profile' => [
-    ],
+    'install_write_profile' => [],
     'install_verify_database_ready' => [
       'run' => $install_state['database_ready'] ? INSTALL_TASK_SKIP : INSTALL_TASK_RUN_IF_NOT_COMPLETED,
     ],
@@ -770,10 +783,8 @@ function install_tasks($install_state) {
       'display_name' => t('Install site'),
       'type' => 'batch',
     ],
-    'install_profile_themes' => [
-    ],
-    'install_install_profile' => [
-    ],
+    'install_profile_themes' => [],
+    'install_install_profile' => [],
     'install_import_translations' => [
       'display_name' => t('Set up translations'),
       'display' => $needs_translations,
@@ -813,8 +824,7 @@ function install_tasks($install_state) {
       'type' => 'batch',
       'run' => $needs_translations ? INSTALL_TASK_RUN_IF_NOT_COMPLETED : INSTALL_TASK_SKIP,
     ],
-    'install_finished' => [
-    ],
+    'install_finished' => [],
   ];
 
   // Allow the installation profile to modify the full list of tasks.
@@ -1210,6 +1220,8 @@ function install_select_profile(&$install_state) {
  *   - For non-interactive installations via install_drupal() settings.
  * - A discovered profile that is a distribution. If multiple profiles are
  *   distributions, then the first discovered profile will be selected.
+ *   If an inherited profile is detected that is a distribution, it will be
+ *   chosen over its base profile.
  * - Only one visible profile is available.
  *
  * @param array $install_state
@@ -1232,11 +1244,8 @@ function _install_select_profile(&$install_state) {
     }
   }
   // Check for a distribution profile.
-  foreach ($install_state['profiles'] as $profile) {
-    $profile_info = install_profile_info($profile->getName());
-    if (!empty($profile_info['distribution'])) {
-      return $profile->getName();
-    }
+  if ($distribution = \Drupal::service('profile_handler')->selectDistribution(array_keys($install_state['profiles']))) {
+    return $distribution;
   }
 
   // Get all visible (not hidden) profiles.
@@ -1569,7 +1578,10 @@ function install_profile_themes(&$install_state) {
  *   An array of information about the current installation state.
  */
 function install_install_profile(&$install_state) {
-  \Drupal::service('module_installer')->install([drupal_get_profile()], FALSE);
+  // Install all the profiles.
+  $profiles = \Drupal::service('profile_handler')->getProfileInheritance();
+  \Drupal::service('module_installer')->install(array_keys($profiles), FALSE);
+
   // Install all available optional config. During installation the module order
   // is determined by dependencies. If there are no dependencies between modules
   // then the order in which they are installed is dependent on random factors
@@ -1810,10 +1822,11 @@ function _install_module_batch($module, $module_name, &$context) {
  * @param string $server_pattern
  *   Server access pattern (to replace language code, version number, etc. in).
  *
- * @return array
+ * @return array|null
  *   Requirements compliance array. If the translation was downloaded
  *   successfully then an empty array is returned. Otherwise the requirements
- *   error with detailed information.
+ *   error with detailed information. NULL if the file already exists for this
+ *   language code.
  */
 function install_check_translations($langcode, $server_pattern) {
   $requirements = [];

@@ -86,7 +86,7 @@
  * );
  * @endcode
  */
- $databases = array();
+$databases = array();
 
 /**
  * Customizing database settings.
@@ -144,6 +144,11 @@
  * @code
  *   'prefix' => 'main_',
  * @endcode
+ *
+ * Per-table prefixes are deprecated as of Drupal 8.2, and will be removed in
+ * Drupal 9.0. After that, only a single prefix for all tables will be
+ * supported.
+ *
  * To provide prefixes for specific tables, set 'prefix' as an array.
  * The array's keys are the table names and the values are the prefixes.
  * The 'default' element is mandatory and holds the prefix for any tables
@@ -244,9 +249,7 @@
  *   );
  * @endcode
  */
-$config_directories = array(
-	CONFIG_SYNC_DIRECTORY => '../config/',
-);
+$config_directories = array();
 
 /**
  * Settings:
@@ -267,6 +270,11 @@ $config_directories = array(
  * by the user.
  *
  * @see install_select_profile()
+ *
+ * @deprecated in Drupal 8.3.0 and will be removed before Drupal 9.0.0. The
+ *   install profile is written to the core.extension configuration. If a
+ *   service requires the install profile use the 'install_profile' container
+ *   parameter. Functional code can use \Drupal::installProfile().
  */
 # $settings['install_profile'] = '';
 
@@ -287,7 +295,7 @@ $config_directories = array(
  *   $settings['hash_salt'] = file_get_contents('/home/example/salt.txt');
  * @endcode
  */
-$settings['hash_salt'] = '46CVgI4fYthddxonoD3n90tXQN_INdNKztYhPlII-zn_vjANZr-yCCuEzzOtSvjNbLplX3mn_g';
+$settings['hash_salt'] = '_he7ulXRw7SkPUat_k0WwM_i9Y5fOVucHHmulsP_vwJ4FypixxGcbrCK7kSATEABz4J1KwgMhw';
 
 /**
  * Deployment identifier.
@@ -432,6 +440,15 @@ $settings['update_free_access'] = FALSE;
  */
 # $settings['cache_ttl_4xx'] = 3600;
 
+/**
+ * Expiration of cached forms.
+ *
+ * Drupal's Form API stores details of forms in a cache and these entries are
+ * kept for at least 6 hours by default. Expired entries are cleared by cron.
+ *
+ * @see \Drupal\Core\Form\FormCache::setCache()
+ */
+# $settings['form_cache_expiration'] = 21600;
 
 /**
  * Class Loader.
@@ -517,7 +534,7 @@ if ($settings['hash_salt']) {
  * must exist and be writable by Drupal. This directory must be relative to
  * the Drupal installation directory and be accessible over the web.
  */
- $settings['file_public_path'] = 'sites/default/files';
+# $settings['file_public_path'] = 'sites/default/files';
 
 /**
  * Private file path:
@@ -532,8 +549,7 @@ if ($settings['hash_salt']) {
  * See https://www.drupal.org/documentation/modules/file for more information
  * about securing private files.
  */
-
- $settings['file_private_path'] = '../files-private';
+# $settings['file_private_path'] = '';
 
 /**
  * Session write interval:
@@ -636,6 +652,7 @@ if ($settings['hash_salt']) {
  * configuration values in settings.php will not fire any of the configuration
  * change events.
  */
+# $config['system.file']['path']['temporary'] = '/tmp';
 # $config['system.site']['name'] = 'My Drupal site';
 # $config['system.theme']['default'] = 'stark';
 # $config['user.settings']['anonymous'] = 'Visitor';
@@ -743,6 +760,16 @@ $settings['file_scan_ignore_directories'] = [
 ];
 
 /**
+ * The default number of entities to update in a batch process.
+ *
+ * This is used by update and post-update functions that need to go through and
+ * change all the entities on a site, so it is useful to increase this number
+ * if your hosting configuration (i.e. RAM allocation, CPU speed) allows for a
+ * larger number of entities to be processed in a single batch run.
+ */
+$settings['entity_update_batch_size'] = 50;
+
+/**
  * Load local development override configuration, if available.
  *
  * Use settings.local.php to override variables on secondary (staging,
@@ -757,9 +784,9 @@ $settings['file_scan_ignore_directories'] = [
 #   include $app_root . '/' . $site_path . '/settings.local.php';
 # }
 $databases['default']['default'] = array (
-  'database' => 'slrenproddb',
-  'username' => 'slrenproddb',
-  'password' => 'NrgmE6&5prs8rpXt',
+  'database' => 'slrendev',
+  'username' => 'slrendev',
+  'password' => 'hEq!jg1f5XM0tlph',
   'prefix' => '',
   'host' => 'localhost',
   'port' => '3306',
@@ -775,3 +802,4 @@ $settings['trusted_host_patterns'] = array(
  '^.+\.slren\.edu\sl',
  '^139\.162\.234\.104',
 );
+$settings['install_profile'] = 'lightning';
